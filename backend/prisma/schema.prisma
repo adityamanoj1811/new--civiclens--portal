@@ -1,0 +1,241 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  name        String?
+  role        Role     @default(TEAM_MEMBER)
+  department  String?
+  avatar      String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  assignedIssues Issue[] @relation("AssignedTo")
+  reportedIssues Issue[] @relation("ReportedBy")
+  comments       Comment[]
+  meetings       Meeting[] @relation("MeetingOrganizer")
+  meetingAttendees MeetingAttendee[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Issue {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  status      IssueStatus @default(PENDING)
+  priority    Priority    @default(MEDIUM)
+  department  String
+  latitude    Float
+  longitude   Float
+  address     String?
+  slaDeadline DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  reportedById String?
+  reportedBy   User?   @relation("ReportedBy", fields: [reportedById], references: [id])
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  comments    Comment[]
+  attachments Attachment[]
+  lifecycle   IssueLifecycle[]
+  auditLogs   AuditLog[]
+
+  @@map("issues")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  issueId String
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+
+  @@map("comments")
+}
+
+model Attachment {
+  id       String @id @default(cuid())
+  filename String
+  filepath String
+  mimetype String
+  size     Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  issueId String
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model IssueLifecycle {
+  id        String            @id @default(cuid())
+  step      LifecycleStep
+  status    LifecycleStatus   @default(PENDING)
+  notes     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  // Relations
+  issueId String
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("issue_lifecycle")
+}
+
+model Meeting {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  type        MeetingType   @default(TEAM)
+  status      MeetingStatus @default(SCHEDULED)
+  location    String?
+  meetingLink String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  organizerId String
+  organizer   User    @relation("MeetingOrganizer", fields: [organizerId], references: [id])
+  attendees   MeetingAttendee[]
+
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  id        String            @id @default(cuid())
+  status    AttendeeStatus    @default(INVITED)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  // Relations
+  meetingId String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([meetingId, userId])
+  @@map("meeting_attendees")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String    @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  oldValues Json?
+  newValues Json?
+  createdAt DateTime  @default(now())
+
+  // Relations
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id])
+  issueId String?
+  issue   Issue?  @relation(fields: [issueId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  DEPARTMENT_HEAD
+  TEAM_MEMBER
+}
+
+enum IssueStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LifecycleStep {
+  REPORTED
+  ACKNOWLEDGED
+  ASSIGNED
+  RESOLVED
+  CITIZEN_VERIFIED
+}
+
+enum LifecycleStatus {
+  PENDING
+  CURRENT
+  COMPLETED
+}
+
+enum MeetingType {
+  TEAM
+  DEPARTMENT
+  PROJECT
+  REVIEW
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendeeStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+  TENTATIVE
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+}
